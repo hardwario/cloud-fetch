@@ -120,8 +120,8 @@ class MessageFetcher:
 
 @click.command()
 @click.option('--xlsx-file', '-x', metavar='XLSX_FILE', required=True, help='Specify output XLSX file.')
-@click.option('--group-id', '-g', metavar='GROUP_ID', required=True, help='Provide group identifier.')
-@click.option('--api-token', '-t', metavar='API_TOKEN', required=True, help='Provide group api token.')
+@click.option('--group-id', '-g', metavar='GROUP_ID', required=True, help='Specify group identifier.')
+@click.option('--api-token', '-t', metavar='API_TOKEN', required=True, help='Specify group API token.')
 def main(xlsx_file, group_id, api_token):
 
     # Fetch all devices in group
