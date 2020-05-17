@@ -29,7 +29,7 @@ This repository contains a Python 3 CLI script to fetch device messages in HARDW
 
 1. Run the script:
 
-       python3 fetch.py -g GROUP_ID -t GROUP_TOKEN
+       python3 fetch.py -x XLSX_FILE -g GROUP_ID -t GROUP_TOKEN
 
 > The measurements can be easily modified in the `extract_measurement` function.
 
