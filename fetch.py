@@ -11,14 +11,34 @@ LOAD_RESISTOR = 39
 
 def extract_measurement(message):
 
-    if 'battery' not in message['data']:
-        return None
-
     # Fetch message date
-    dt = pendulum.parse(message['created_at'])
-    dt = dt.in_timezone('Europe/Prague')
-    date = dt.to_datetime_string()
+    samples = message['data'].get('sensor', {}).get('external', {}).get('voltage', {}).get('samples', [])
 
+    for sample in samples:
+        timestamp = sample.get('timestamp')
+        rms = sample.get('rms')
+        avg = sample.get('avg')
+        minimum = sample.get('min')
+        maximum = sample.get('max')
+        temperature = message['data'].get('sensor', {}).get('hygrometer', {}).get('temperature')
+        humidity = message['data'].get('sensor', {}).get('hygrometer', {}).get('humidity')
+        dt = pendulum.from_timestamp(timestamp)
+        dt = dt.in_timezone('Europe/Prague')
+        date = dt.to_datetime_string()
+        if timestamp and rms and avg and minimum and maximum and temperature and humidity:
+            yield {
+                'label': message['label'],
+                'date': date,
+                'rms': rms,
+                'avg': avg,
+                'min': minimum,
+                'max': maximum,
+                'temperature': temperature,
+                'humidity': humidity,
+            }
+
+
+    """
     # Fetch voltages
     v1 = message['data']['battery'].get('voltage1')
     v2 = message['data']['battery'].get('voltage2')
@@ -40,6 +60,7 @@ def extract_measurement(message):
         }
 
     return None
+    """
 
 
 class FetchException(Exception):
@@ -89,26 +110,29 @@ class MessageFetcher:
         self._device_id = device_id
         self._api_token = api_token
 
-    def _get(self, limit=100, offset=0):
+    def _get(self, limit=100, offset=0, since=None):
         params = {
             'group_id': self._group_id,
             'device_id': self._device_id,
             'limit': limit,
             'offset': offset
         }
+        if since is not None:
+            params['since'] = int(since) * 1000
         headers = {
             'Authorization': 'Bearer {}'.format(self._api_token)
         }
         r = requests.get('https://api.hardwario.cloud/v1/messages', params=params, headers=headers)
         if r.status_code != 200:
+            print(r.status_code)
             raise FetchException
         return json.loads(r.text)
 
-    def fetch(self):
+    def fetch(self, since):
         found = False; records = []; offset = 0; limit = 100
         while True:
             found = True; click.echo('.', nl=False)
-            data = self._get(limit=limit, offset=offset)
+            data = self._get(limit=limit, offset=offset, since=since)
             count = len(data)
             records += data; offset += count
             if count == 0 or count < limit:
@@ -120,9 +144,10 @@ class MessageFetcher:
 
 @click.command()
 @click.option('--xlsx-file', '-x', metavar='XLSX_FILE', required=True, help='Specify output XLSX file.')
+@click.option('--since', '-s', metavar='SINCE', required=False, help='Specify timestamp since when to fetch data.')
 @click.option('--group-id', '-g', metavar='GROUP_ID', required=True, help='Specify group identifier.')
 @click.option('--api-token', '-t', metavar='API_TOKEN', required=True, help='Specify group API token.')
-def main(xlsx_file, group_id, api_token):
+def main(xlsx_file, since, group_id, api_token):
 
     # Fetch all devices in group
     click.echo('Fetching data for group: {}...'.format(group_id))
@@ -135,7 +160,7 @@ def main(xlsx_file, group_id, api_token):
 
         # Fetch all messages for device
         click.echo('Fetching messages for device: {} ({})...'.format(device['id'], device['name']))
-        messages = MessageFetcher(device['group_id'], device['id'], device['api_token']).fetch()
+        messages = MessageFetcher(device['group_id'], device['id'], device['api_token']).fetch(since)
 
         # Initialize measurements
         measurements = []
@@ -144,11 +169,10 @@ def main(xlsx_file, group_id, api_token):
         for m in messages:
 
             # Extract desired measurement out of the message
-            measurement = extract_measurement(m)
-
-            # Append the measurement if it was extracted
-            if measurement is not None:
-                measurements.append(measurement)
+            for measurement in extract_measurement(m):
+                # Append the measurement if it was extracted
+                if measurement is not None:
+                    measurements.append(measurement)
 
         # Append sheet as Pandas data frame
         df = pandas.DataFrame(measurements)
