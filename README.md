@@ -6,6 +6,7 @@ This repository contains a Python 3 CLI script to fetch device messages in HARDW
 ## Requirements
 
 * Python 3
+* Git
 
 
 ## Installation
